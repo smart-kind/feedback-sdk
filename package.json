@@ -1,0 +1,34 @@
+{
+  "id": "feedback-sdk",
+  "name": "feedback-sdk",
+  "displayName": "Feedback SDK",
+  "version": "0.1.0",
+  "description": "通用意见收集 SDK（无 UI）：纯 JS API + Deno KV / uniCloud 后端 + 读回脚本，无 npm 依赖。",
+  "type": "module",
+  "main": "js_sdk/index.js",
+  "module": "js_sdk/index.js",
+  "types": "js_sdk/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./js_sdk/index.d.ts",
+      "import": "./js_sdk/index.js"
+    }
+  },
+  "files": [
+    "js_sdk",
+    "server",
+    "scripts",
+    "examples",
+    "README.md"
+  ],
+  "keywords": [
+    "uni-app",
+    "unicloud",
+    "deno",
+    "deno-kv",
+    "feedback",
+    "意见反馈"
+  ],
+  "license": "MIT",
+  "sideEffects": false
+}

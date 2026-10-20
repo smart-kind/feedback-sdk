@@ -1,0 +1,40 @@
+{
+  "$schema": "https://deno.land/x/deno/cli/schemas/deno.json",
+  "tasks": {
+    "serve": "deno run --allow-net --allow-env --unstable-kv --watch server/deno/main.ts",
+    "start": "deno run --allow-net --allow-env --unstable-kv server/deno/main.ts",
+    "deploy": "bash server/deno/deploy.sh",
+    "deploy:prod": "bash server/deno/deploy.sh --prod",
+    "check": "deno check js_sdk/index.js server/deno/main.ts",
+    "fmt": "deno fmt",
+    "lint": "deno lint",
+    "test": "deno test --allow-net --allow-env --unstable-kv"
+  },
+  "imports": {
+    "@feedback-sdk/": "./js_sdk/"
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "examples",
+    "scripts",
+    "uniCloud",
+    "**/.DS_Store"
+  ],
+  "fmt": {
+    "useTabs": false,
+    "lineWidth": 100,
+    "indentWidth": 2,
+    "singleQuote": true,
+    "proseWrap": "preserve"
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-explicit-any"]
+    }
+  },
+  "compilerOptions": {
+    "lib": ["deno.window", "dom", "dom.iterable", "es2022"],
+    "strict": true
+  }
+}

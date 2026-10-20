@@ -1,0 +1,9 @@
+{
+  "name": "feedback-center",
+  "version": "1.0.0",
+  "main": "index.obj.js",
+  "extensions": {
+    "uni-cloud-jql": {}
+  },
+  "type": "commonjs"
+}

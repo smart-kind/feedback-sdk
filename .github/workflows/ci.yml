@@ -1,0 +1,61 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno task check
+      - run: deno lint
+
+  deploy-preview:
+    needs: check
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # OIDC for Deno Deploy
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno install -Ar jsr:@deno/deployctl
+      - name: Deploy preview
+        working-directory: server/deno
+        env:
+          DENO_PROJECT: ${{ vars.DENO_PROJECT || 'feedback-sdk' }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          ALLOWED_ORIGIN: ${{ vars.ALLOWED_ORIGIN || '*' }}
+        run: bash deploy.sh
+
+  deploy-prod:
+    needs: check
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno install -Ar jsr:@deno/deployctl
+      - name: Deploy production
+        working-directory: server/deno
+        env:
+          DENO_PROJECT: ${{ vars.DENO_PROJECT || 'feedback-sdk' }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
+          ALLOWED_ORIGIN: ${{ vars.ALLOWED_ORIGIN || '*' }}
+        run: bash deploy.sh --prod
