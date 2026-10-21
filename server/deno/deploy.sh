@@ -13,6 +13,9 @@
 
 set -euo pipefail
 
+# Ensure deno tools are in PATH
+export PATH="$HOME/.deno/bin:$PATH"
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 ENTRY="$ROOT/server/deno/main.ts"
 
@@ -58,5 +61,12 @@ if [[ -n "${ALLOWED_ORIGIN:-}" ]]; then
   ARGS+=(--env=ALLOWED_ORIGIN="$ALLOWED_ORIGIN")
 fi
 
+cd "$ROOT"
+# Load .env if present
+if [[ -f "$ROOT/.env" ]]; then
+  set -a
+  source "$ROOT/.env"
+  set +a
+fi
 cd "$ROOT/server/deno"
 exec deployctl "${ARGS[@]}"

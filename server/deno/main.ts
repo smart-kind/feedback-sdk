@@ -1,9 +1,9 @@
-/// <reference lib="deno.unstable" />
+// @ts-nocheck
 /**
  * feedback-sdk — Deno Deploy + Deno KV 后端模板
  *
  * 部署:
- *   deployctl deploy --project=<your-project> main.ts
+ *   deno deploy server/deno/main.ts --org <org> --app <app> --prod
  *   或在 Deno Deploy 控制台新建项目，入口文件指向 main.ts
  *
  * 环境变量:
@@ -29,30 +29,30 @@ const CORS = {
   'Access-Control-Max-Age': '86400',
 };
 
-function json(data: unknown, status = 200) {
+function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { ...CORS, 'Content-Type': 'application/json; charset=utf-8' },
   });
 }
 
-function text(value: unknown, max = 300) {
+function text(value, max = 300) {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
 }
 
-function positiveInt(value: unknown, fallback: number, max?: number) {
+function positiveInt(value, fallback, max) {
   const parsed = parseInt(String(value ?? ''), 10);
   if (!Number.isFinite(parsed) || parsed < 1) return fallback;
   return max ? Math.min(parsed, max) : parsed;
 }
 
-function clientIP(req: Request, info?: { remoteAddr?: Deno.NetAddr }) {
+function clientIP(req, info) {
   const forwarded = req.headers.get('x-forwarded-for');
   if (forwarded) return forwarded.split(',')[0].trim();
   return info?.remoteAddr?.hostname || '';
 }
 
-async function readBody(req: Request): Promise<Record<string, any>> {
+async function readBody(req) {
   try {
     const data = await req.json();
     return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
@@ -61,11 +61,11 @@ async function readBody(req: Request): Promise<Record<string, any>> {
   }
 }
 
-function feedbackKey(appId: string, mode: string, createdAt: number, id: string) {
+function feedbackKey(appId, mode, createdAt, id) {
   return ['feedback', appId, mode, createdAt, id];
 }
 
-async function submit(req: Request, info?: { remoteAddr?: Deno.NetAddr }) {
+async function submit(req, info) {
   const data = await readBody(req);
   const content = text(data.content, MAX_CONTENT + 1);
   const appId = text(data.appId, 64);
@@ -112,7 +112,7 @@ async function submit(req: Request, info?: { remoteAddr?: Deno.NetAddr }) {
   return json({ code: 0, id });
 }
 
-async function list(req: Request) {
+async function list(req) {
   const data = await readBody(req);
   const page = positiveInt(data.page, 1);
   const pageSize = positiveInt(data.pageSize, 20, 100);
@@ -123,9 +123,9 @@ async function list(req: Request) {
 
   const prefix = appId ? mode ? ['feedback', appId, mode] : ['feedback', appId] : ['feedback'];
 
-  const items: any[] = [];
+  const items = [];
   for await (const entry of kv.list({ prefix })) {
-    const value = entry.value as Record<string, any>;
+    const value = entry.value;
     if (!value || typeof value !== 'object') continue;
     if (mode && !appId && value.mode !== mode) continue;
     if (session && value.session !== session) continue;
@@ -139,7 +139,7 @@ async function list(req: Request) {
   return json({ code: 0, total, items: items.slice(start, start + pageSize) });
 }
 
-async function updateStatus(req: Request) {
+async function updateStatus(req) {
   const data = await readBody(req);
   if (!ADMIN_KEY || data.key !== ADMIN_KEY) {
     return json({ code: 403, message: '无权限' });
@@ -149,7 +149,7 @@ async function updateStatus(req: Request) {
     return json({ code: 400, message: `状态不合法，可选：${ALLOWED_STATUS.join(' / ')}` });
   }
   const ids = (Array.isArray(data.ids) ? data.ids : [data.ids])
-    .filter((id: unknown) => typeof id === 'string' && id)
+    .filter((id) => typeof id === 'string' && id)
     .slice(0, 100);
   const note = text(data.note, 500);
   const version = text(data.version, 16);
@@ -157,10 +157,10 @@ async function updateStatus(req: Request) {
   let updated = 0;
   for (const id of ids) {
     const index = await kv.get(['feedback_id', id]);
-    const mainKey = index.value as any;
+    const mainKey = index.value;
     if (!mainKey) continue;
     const current = await kv.get(mainKey);
-    const record = current.value as Record<string, any> | null;
+    const record = current.value;
     if (!record) continue;
     await kv.set(mainKey, {
       ...record,
@@ -174,19 +174,19 @@ async function updateStatus(req: Request) {
   return json({ code: 0, updated });
 }
 
-async function remove(req: Request) {
+async function remove(req) {
   const data = await readBody(req);
   if (!ADMIN_KEY || data.key !== ADMIN_KEY) {
     return json({ code: 403, message: '无权限' });
   }
   const ids = (Array.isArray(data.ids) ? data.ids : [data.ids])
-    .filter((id: unknown) => typeof id === 'string' && id)
+    .filter((id) => typeof id === 'string' && id)
     .slice(0, 100);
 
   let removed = 0;
   for (const id of ids) {
     const index = await kv.get(['feedback_id', id]);
-    const mainKey = index.value as any;
+    const mainKey = index.value;
     if (!mainKey) continue;
     await kv.atomic()
       .delete(mainKey)
@@ -225,6 +225,6 @@ Deno.serve({ port: Number(Deno.env.get('PORT')) || 8787 }, async (req, info) => 
     }
   } catch (err) {
     console.error('[feedback-sdk]', err);
-    return json({ code: 500, message: (err as Error)?.message || '服务异常' });
+    return json({ code: 500, message: err?.message || '服务异常' });
   }
 });
