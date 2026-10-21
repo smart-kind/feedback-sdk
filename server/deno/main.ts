@@ -197,6 +197,84 @@ async function remove(req) {
   return json({ code: 0, removed });
 }
 
+async function dashboard() {
+  const items = [];
+  for await (const entry of kv.list({ prefix: ['feedback'] })) {
+    const v = entry.value;
+    if (v && typeof v === 'object' && v._id) items.push(v);
+  }
+  items.sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+
+  const groups = {};
+  for (const item of items) {
+    const key = item.appId || '(unknown)';
+    if (!groups[key]) groups[key] = { appName: item.appName || key, items: [] };
+    groups[key].items.push(item);
+  }
+
+  const statusColors = {
+    new: '#3b82f6', implemented: '#22c55e', considered: '#f59e0b',
+    rejected: '#ef4444', duplicate: '#6b7280',
+  };
+
+  const fmtTime = (ts) => {
+    if (!ts) return '-';
+    return new Date(Number(ts)).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+  };
+
+  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  let rows = '';
+  for (const [appId, group] of Object.entries(groups)) {
+    rows += `<tr class="app-row"><td colspan="6"><strong>${esc(group.appName)}</strong> <span style="color:#888">(${esc(appId)})</span> — ${group.items.length} 条</td></tr>`;
+    for (const item of group.items) {
+      const color = statusColors[item.status] || '#6b7280';
+      rows += `<tr>
+        <td style="padding-left:24px">${esc(item.content)}</td>
+        <td>${esc(item.page)}</td>
+        <td>${esc(item.username || '-')}</td>
+        <td><span style="background:${color};color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">${esc(item.status)}</span></td>
+        <td>${esc(item.mode)}</td>
+        <td>${fmtTime(item.createdAt)}</td>
+      </tr>`;
+    }
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feedback SDK — 反馈看板</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fa; color: #333; padding: 24px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .subtitle { color: #666; font-size: 14px; margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  th { background: #1a1a2e; color: #fff; text-align: left; padding: 10px 12px; font-size: 13px; }
+  td { padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 13px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .app-row td { background: #f0f4ff; padding: 10px 12px; font-size: 14px; border-bottom: 2px solid #ddd; }
+  tr:hover td { background: #fafafa; }
+  .app-row:hover td { background: #e8edff; }
+  .empty { text-align: center; padding: 40px; color: #999; }
+</style>
+</head>
+<body>
+<h1>Feedback SDK 反馈看板</h1>
+<p class="subtitle">共 ${items.length} 条反馈，${Object.keys(groups).length} 个应用</p>
+${items.length === 0 ? '<div class="empty">暂无反馈数据</div>' : `<table>
+<thead><tr><th>内容</th><th>页面</th><th>用户</th><th>状态</th><th>模式</th><th>时间</th></tr></thead>
+<tbody>${rows}</tbody>
+</table>`}
+</body>
+</html>`;
+
+  return new Response(html, {
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  });
+}
+
 Deno.serve({ port: Number(Deno.env.get('PORT')) || 8787 }, async (req, info) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS });
@@ -205,6 +283,12 @@ Deno.serve({ port: Number(Deno.env.get('PORT')) || 8787 }, async (req, info) => 
   const url = new URL(req.url);
   if (req.method === 'GET' && url.pathname === '/health') {
     return json({ ok: true, service: 'feedback-sdk' });
+  }
+  if (req.method === 'GET' && url.pathname === '/dashboard') {
+    return await dashboard();
+  }
+  if (req.method === 'GET' && url.pathname === '/') {
+    return new Response(null, { status: 302, headers: { Location: '/dashboard' } });
   }
   if (req.method !== 'POST') {
     return json({ code: 405, message: 'Method Not Allowed' }, 405);
