@@ -314,7 +314,7 @@ async function dashboard() {
     <textarea id="submitContent" maxlength="1000" placeholder="说说遇到的问题或建议…"></textarea>
   </div>
   <div style="display:flex;justify-content:flex-end">
-    <button class="btn-green" onclick="doSubmit()">提交意见</button>
+    <button class="btn-green" id="submitBtn" onclick="doSubmit()">提交意见</button>
   </div>
 </div>
 
@@ -434,6 +434,9 @@ async function doSubmit() {
   if (!content) { showMsg('error', '请输入意见内容'); return; }
   if (content.length > 1000) { showMsg('error', '意见内容不能超过 1000 字'); return; }
 
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = '提交中…';
   try {
     const res = await fetch(ENDPOINT + '/submit', {
       method: 'POST',
@@ -450,6 +453,9 @@ async function doSubmit() {
     }
   } catch (err) {
     showMsg('error', '网络错误：' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '提交意见';
   }
 }
 
