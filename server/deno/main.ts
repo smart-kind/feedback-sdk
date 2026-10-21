@@ -245,6 +245,20 @@ async function dashboard() {
   .flex-between { display: flex; justify-content: space-between; align-items: center; }
   .filter-bar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
   .filter-bar select, .filter-bar input { width: auto; min-width: 140px; padding: 7px 10px; font-size: 13px; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  @media (max-width: 640px) {
+    body { padding: 14px; }
+    h1 { font-size: 18px; }
+    .card { padding: 14px; }
+    .card h2 { font-size: 15px; }
+    .row { flex-direction: column; gap: 10px; }
+    .row > * { flex: 1 1 100%; }
+    .filter-bar { flex-direction: column; gap: 8px; }
+    .filter-bar select, .filter-bar input { width: 100%; min-width: 0; }
+    table { font-size: 12px; }
+    th, td { padding: 6px 8px; }
+    td { max-width: 140px; }
+  }
 </style>
 </head>
 <body>
@@ -472,7 +486,7 @@ async function loadList() {
       return new Date(Number(ts)).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
     };
 
-    let html = '<table><thead><tr><th>内容</th><th>页面</th><th>应用</th><th>状态</th><th>时间</th></tr></thead><tbody>';
+    let html = '<div class="table-wrap"><table><thead><tr><th>内容</th><th>页面</th><th>应用</th><th>状态</th><th>时间</th></tr></thead><tbody>';
     for (const item of data.items) {
       const color = statusColors[item.status] || '#6b7280';
       const label = statusLabels[item.status] || item.status;
@@ -484,7 +498,7 @@ async function loadList() {
         '<td>' + fmtTime(item.createdAt) + '</td>' +
         '</tr>';
     }
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     if (data.total > 100) html += '<p class="hint" style="text-align:center;margin-top:10px">显示最新 100 条，共 ' + data.total + ' 条</p>';
     container.innerHTML = html;
   } catch (err) {
