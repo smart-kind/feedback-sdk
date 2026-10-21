@@ -517,11 +517,11 @@ Deno.serve({ port: Number(Deno.env.get('PORT')) || 8787 }, async (req, info) => 
   if (req.method === 'GET' && url.pathname === '/health') {
     return json({ ok: true, service: 'feedback-sdk' });
   }
-  if (req.method === 'GET' && url.pathname === '/dashboard') {
+  if (req.method === 'GET' && url.pathname === '/feedback') {
     return await dashboard();
   }
   if (req.method === 'GET' && url.pathname === '/') {
-    return new Response(null, { status: 302, headers: { Location: '/dashboard' } });
+    return new Response(null, { status: 302, headers: { Location: '/feedback' } });
   }
   if (req.method !== 'POST') {
     return json({ code: 405, message: 'Method Not Allowed' }, 405);

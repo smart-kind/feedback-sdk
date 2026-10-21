@@ -7,6 +7,8 @@
 
 **服务端地址：** https://feedback-sdk.david-crazyamber.deno.net
 
+**意见管理页面：** https://feedback-sdk.david-crazyamber.deno.net/feedback
+
 ---
 
 ## 目录
@@ -395,21 +397,21 @@ implemented  considered  rejected  duplicate
 
 ---
 
-## 6. Dashboard 看板页面
+## 6. 意见管理页面
 
-项目提供了一个内置的 HTML 看板页面，可按 AppID 分组查看所有反馈：
+项目提供了一个内置的 HTML 管理页面，可管理 AppID、提交意见、查看反馈列表：
 
 ```
-https://feedback-sdk.david-crazyamber.deno.net/dashboard
+https://feedback-sdk.david-crazyamber.deno.net/feedback
 ```
 
 **功能：**
-- 按 AppID 分组展示所有反馈
-- 显示状态、提交时间、页面、内容等信息
-- 支持按 appId、mode、status 过滤
-- 无需登录，直接访问
+- 管理 AppID（添加、选择、删除）
+- 直接提交意见（无需代码，打开即用）
+- 按 AppID / 状态 / 模式过滤反馈列表
+- 无需登录认证
 
-也可以直接访问根路径，会自动跳转到 Dashboard：
+也可以直接访问根路径，会自动跳转：
 
 ```
 https://feedback-sdk.david-crazyamber.deno.net/
