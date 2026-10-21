@@ -198,75 +198,308 @@ async function remove(req) {
 }
 
 async function dashboard() {
-  const items = [];
-  for await (const entry of kv.list({ prefix: ['feedback'] })) {
-    const v = entry.value;
-    if (v && typeof v === 'object' && v._id) items.push(v);
-  }
-  items.sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
-
-  const groups = {};
-  for (const item of items) {
-    const key = item.appId || '(unknown)';
-    if (!groups[key]) groups[key] = { appName: item.appName || key, items: [] };
-    groups[key].items.push(item);
-  }
-
-  const statusColors = {
-    new: '#3b82f6', implemented: '#22c55e', considered: '#f59e0b',
-    rejected: '#ef4444', duplicate: '#6b7280',
-  };
-
-  const fmtTime = (ts) => {
-    if (!ts) return '-';
-    return new Date(Number(ts)).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-  };
-
-  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-  let rows = '';
-  for (const [appId, group] of Object.entries(groups)) {
-    rows += `<tr class="app-row"><td colspan="6"><strong>${esc(group.appName)}</strong> <span style="color:#888">(${esc(appId)})</span> — ${group.items.length} 条</td></tr>`;
-    for (const item of group.items) {
-      const color = statusColors[item.status] || '#6b7280';
-      rows += `<tr>
-        <td style="padding-left:24px">${esc(item.content)}</td>
-        <td>${esc(item.page)}</td>
-        <td>${esc(item.username || '-')}</td>
-        <td><span style="background:${color};color:#fff;padding:2px 8px;border-radius:4px;font-size:12px">${esc(item.status)}</span></td>
-        <td>${esc(item.mode)}</td>
-        <td>${fmtTime(item.createdAt)}</td>
-      </tr>`;
-    }
-  }
-
   const html = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Feedback SDK — 反馈看板</title>
+<title>Feedback SDK — 意见管理</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fa; color: #333; padding: 24px; }
-  h1 { font-size: 20px; margin-bottom: 4px; }
-  .subtitle { color: #666; font-size: 14px; margin-bottom: 20px; }
-  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-  th { background: #1a1a2e; color: #fff; text-align: left; padding: 10px 12px; font-size: 13px; }
-  td { padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 13px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .app-row td { background: #f0f4ff; padding: 10px 12px; font-size: 14px; border-bottom: 2px solid #ddd; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fa; color: #333; padding: 24px; max-width: 800px; margin: 0 auto; }
+  h1 { font-size: 22px; margin-bottom: 6px; }
+  .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
+  .card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); padding: 20px; margin-bottom: 20px; }
+  .card h2 { font-size: 16px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  label { display: block; font-size: 13px; color: #555; margin-bottom: 4px; font-weight: 500; }
+  input, select, textarea { width: 100%; padding: 9px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; transition: border-color .15s; }
+  input:focus, select:focus, textarea:focus { border-color: #4ade80; }
+  textarea { resize: vertical; min-height: 100px; }
+  .row { display: flex; gap: 10px; align-items: flex-end; }
+  .row > * { flex: 1; }
+  button { padding: 9px 18px; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 500; transition: opacity .15s; }
+  button:hover { opacity: 0.85; }
+  .btn-green { background: linear-gradient(135deg, #4ade80, #16a34a); color: #fff; }
+  .btn-blue { background: linear-gradient(135deg, #60a5fa, #2563eb); color: #fff; }
+  .btn-gray { background: #e5e7eb; color: #333; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .appid-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .appid-tag { display: inline-flex; align-items: center; gap: 6px; background: #f0f4ff; border: 1px solid #d0d8f0; border-radius: 6px; padding: 4px 10px; font-size: 13px; cursor: pointer; transition: all .15s; }
+  .appid-tag:hover { background: #e0e8ff; }
+  .appid-tag.active { background: #22c55e; color: #fff; border-color: #16a34a; }
+  .appid-tag .remove { font-size: 11px; color: #999; cursor: pointer; margin-left: 2px; }
+  .appid-tag .remove:hover { color: #e33; }
+  .appid-tag.active .remove { color: rgba(255,255,255,0.7); }
+  .appid-tag.active .remove:hover { color: #fff; }
+  .form-group { margin-bottom: 14px; }
+  .hint { font-size: 12px; color: #888; margin-top: 4px; }
+  .msg { padding: 10px 14px; border-radius: 8px; font-size: 14px; margin-bottom: 14px; display: none; }
+  .msg.success { background: #dcfce7; color: #166534; display: block; }
+  .msg.error { background: #fee2e2; color: #991b1b; display: block; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #f8f9fa; text-align: left; padding: 8px 10px; font-size: 12px; color: #666; border-bottom: 2px solid #e5e7eb; }
+  td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; font-size: 13px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   tr:hover td { background: #fafafa; }
-  .app-row:hover td { background: #e8edff; }
-  .empty { text-align: center; padding: 40px; color: #999; }
+  .status-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; color: #fff; font-weight: 500; }
+  .empty { text-align: center; padding: 30px; color: #aaa; font-size: 14px; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .filter-bar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .filter-bar select, .filter-bar input { width: auto; min-width: 140px; padding: 7px 10px; font-size: 13px; }
 </style>
 </head>
 <body>
-<h1>Feedback SDK 反馈看板</h1>
-<p class="subtitle">共 ${items.length} 条反馈，${Object.keys(groups).length} 个应用</p>
-${items.length === 0 ? '<div class="empty">暂无反馈数据</div>' : `<table>
-<thead><tr><th>内容</th><th>页面</th><th>用户</th><th>状态</th><th>模式</th><th>时间</th></tr></thead>
-<tbody>${rows}</tbody>
-</table>`}
+<h1>Feedback SDK 意见管理</h1>
+<p class="subtitle">管理 AppID、提交和查看反馈意见</p>
+
+<!-- AppID 管理 -->
+<div class="card">
+  <h2>📌 AppID 管理</h2>
+  <div class="row">
+    <div>
+      <label>添加新 AppID</label>
+      <input id="newAppId" type="text" placeholder="输入英文标识，如 crm-dashboard" pattern="[a-zA-Z0-9\\-]+" />
+      <p class="hint">英文字母、数字、连字符，如 my-app</p>
+    </div>
+    <div style="flex:0 0 auto">
+      <button class="btn-blue" onclick="addAppId()">添加 AppID</button>
+    </div>
+  </div>
+  <div class="appid-list" id="appidList"></div>
+</div>
+
+<!-- 提交意见 -->
+<div class="card">
+  <h2>✏️ 提交意见</h2>
+  <div id="submitMsg" class="msg"></div>
+  <div class="form-group">
+    <label>选择 AppID</label>
+    <select id="submitAppId">
+      <option value="">— 请先添加或选择 AppID —</option>
+    </select>
+  </div>
+  <div class="row" style="margin-bottom:14px">
+    <div>
+      <label>应用名称（显示用）</label>
+      <input id="submitAppName" type="text" placeholder="如：CRM 系统" />
+    </div>
+    <div>
+      <label>页面名称（英文）</label>
+      <input id="submitPage" type="text" placeholder="如 user/list" />
+    </div>
+    <div>
+      <label>模式</label>
+      <select id="submitMode">
+        <option value="test">test</option>
+        <option value="dev">dev</option>
+        <option value="prod">prod</option>
+      </select>
+    </div>
+  </div>
+  <div class="form-group">
+    <label>意见内容</label>
+    <textarea id="submitContent" maxlength="1000" placeholder="说说遇到的问题或建议…"></textarea>
+  </div>
+  <div style="display:flex;justify-content:flex-end">
+    <button class="btn-green" onclick="doSubmit()">提交意见</button>
+  </div>
+</div>
+
+<!-- 反馈列表 -->
+<div class="card">
+  <div class="flex-between" style="margin-bottom:14px">
+    <h2 style="margin:0">📋 反馈列表</h2>
+    <button class="btn-gray btn-sm" onclick="loadList()">刷新</button>
+  </div>
+  <div class="filter-bar">
+    <select id="filterAppId" onchange="loadList()">
+      <option value="">全部应用</option>
+    </select>
+    <select id="filterStatus" onchange="loadList()">
+      <option value="">全部状态</option>
+      <option value="new">未处理</option>
+      <option value="implemented">已实现</option>
+      <option value="considered">已采纳</option>
+      <option value="rejected">已驳回</option>
+      <option value="duplicate">重复</option>
+    </select>
+    <select id="filterMode" onchange="loadList()">
+      <option value="">全部模式</option>
+      <option value="test">test</option>
+      <option value="dev">dev</option>
+      <option value="prod">prod</option>
+    </select>
+  </div>
+  <div id="feedbackList"></div>
+</div>
+
+<script>
+const STORAGE_KEY = 'feedback_sdk_appids';
+const ENDPOINT = location.origin;
+
+const statusLabels = { new: '未处理', implemented: '已实现', considered: '已采纳', rejected: '已驳回', duplicate: '重复' };
+const statusColors = { new: '#3b82f6', implemented: '#22c55e', considered: '#f59e0b', rejected: '#ef4444', duplicate: '#6b7280' };
+
+function getAppIds() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+}
+function saveAppIds(ids) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
+}
+
+let selectedAppId = '';
+
+function render() {
+  const ids = getAppIds();
+  // 渲染 AppID 标签列表
+  const listEl = document.getElementById('appidList');
+  if (ids.length === 0) {
+    listEl.innerHTML = '<p class="hint">还没有 AppID，请在上方添加</p>';
+  } else {
+    listEl.innerHTML = ids.map(id =>
+      '<span class="appid-tag' + (id === selectedAppId ? ' active' : '') + '" onclick="selectAppId(\\'' + esc(id) + '\\')">' +
+        esc(id) +
+        '<span class="remove" onclick="event.stopPropagation();removeAppId(\\'' + esc(id) + '\\')">✕</span>' +
+      '</span>'
+    ).join('');
+  }
+
+  // 更新提交区的 AppID 下拉
+  const submitSelect = document.getElementById('submitAppId');
+  submitSelect.innerHTML = '<option value="">— 选择 AppID —</option>' +
+    ids.map(id => '<option value="' + esc(id) + '"' + (id === selectedAppId ? ' selected' : '') + '>' + esc(id) + '</option>').join('');
+
+  // 更新过滤区的 AppID 下拉
+  const filterSelect = document.getElementById('filterAppId');
+  const currentFilter = filterSelect.value;
+  filterSelect.innerHTML = '<option value="">全部应用</option>' +
+    ids.map(id => '<option value="' + esc(id) + '"' + (id === currentFilter ? ' selected' : '') + '>' + esc(id) + '</option>').join('');
+}
+
+function selectAppId(id) {
+  selectedAppId = (selectedAppId === id) ? '' : id;
+  document.getElementById('submitAppId').value = selectedAppId;
+  render();
+}
+
+function addAppId() {
+  const input = document.getElementById('newAppId');
+  const val = input.value.trim().replace(/[^a-zA-Z0-9\\-]/g, '');
+  if (!val) { alert('请输入有效的 AppID（英文字母、数字、连字符）'); return; }
+  const ids = getAppIds();
+  if (!ids.includes(val)) ids.push(val);
+  saveAppIds(ids);
+  input.value = '';
+  selectedAppId = val;
+  render();
+}
+
+function removeAppId(id) {
+  const ids = getAppIds().filter(x => x !== id);
+  saveAppIds(ids);
+  if (selectedAppId === id) selectedAppId = '';
+  render();
+}
+
+function showMsg(type, text) {
+  const el = document.getElementById('submitMsg');
+  el.className = 'msg ' + type;
+  el.textContent = text;
+  setTimeout(() => { el.className = 'msg'; el.textContent = ''; }, 3000);
+}
+
+async function doSubmit() {
+  const appId = document.getElementById('submitAppId').value;
+  const appName = document.getElementById('submitAppName').value.trim();
+  const page = document.getElementById('submitPage').value.trim();
+  const mode = document.getElementById('submitMode').value;
+  const content = document.getElementById('submitContent').value.trim();
+
+  if (!appId) { showMsg('error', '请选择 AppID'); return; }
+  if (!appName) { showMsg('error', '请输入应用名称'); return; }
+  if (!page) { showMsg('error', '请输入页面名称（英文）'); return; }
+  if (!content) { showMsg('error', '请输入意见内容'); return; }
+  if (content.length > 1000) { showMsg('error', '意见内容不能超过 1000 字'); return; }
+
+  try {
+    const res = await fetch(ENDPOINT + '/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appId, appName, mode, page, content, submittedAt: Date.now() }),
+    });
+    const data = await res.json();
+    if (data.code === 0) {
+      showMsg('success', '提交成功！');
+      document.getElementById('submitContent').value = '';
+      loadList();
+    } else {
+      showMsg('error', data.message || '提交失败');
+    }
+  } catch (err) {
+    showMsg('error', '网络错误：' + err.message);
+  }
+}
+
+async function loadList() {
+  const appId = document.getElementById('filterAppId').value;
+  const status = document.getElementById('filterStatus').value;
+  const mode = document.getElementById('filterMode').value;
+
+  const body = { page: 1, pageSize: 100 };
+  if (appId) body.appId = appId;
+  if (status) body.status = status;
+  if (mode) body.mode = mode;
+
+  try {
+    const res = await fetch(ENDPOINT + '/list', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    const container = document.getElementById('feedbackList');
+
+    if (data.code !== 0) {
+      container.innerHTML = '<div class="empty">加载失败</div>';
+      return;
+    }
+    if (!data.items || data.items.length === 0) {
+      container.innerHTML = '<div class="empty">暂无反馈</div>';
+      return;
+    }
+
+    const fmtTime = (ts) => {
+      if (!ts) return '-';
+      return new Date(Number(ts)).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    };
+
+    let html = '<table><thead><tr><th>内容</th><th>页面</th><th>应用</th><th>状态</th><th>时间</th></tr></thead><tbody>';
+    for (const item of data.items) {
+      const color = statusColors[item.status] || '#6b7280';
+      const label = statusLabels[item.status] || item.status;
+      html += '<tr>' +
+        '<td title="' + esc(item.content) + '">' + esc(item.content) + '</td>' +
+        '<td>' + esc(item.page || '-') + '</td>' +
+        '<td>' + esc(item.appName || item.appId) + '</td>' +
+        '<td><span class="status-badge" style="background:' + color + '">' + esc(label) + '</span></td>' +
+        '<td>' + fmtTime(item.createdAt) + '</td>' +
+        '</tr>';
+    }
+    html += '</tbody></table>';
+    if (data.total > 100) html += '<p class="hint" style="text-align:center;margin-top:10px">显示最新 100 条，共 ' + data.total + ' 条</p>';
+    container.innerHTML = html;
+  } catch (err) {
+    document.getElementById('feedbackList').innerHTML = '<div class="empty">加载失败：' + esc(err.message) + '</div>';
+  }
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// 初始化
+render();
+loadList();
+</script>
 </body>
 </html>`;
 
